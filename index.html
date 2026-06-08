@@ -34,8 +34,8 @@
         // CONFIGURAÇÕES DO SEU HIVEMQ (Atenção: Use a porta 8884 para WebSockets na Web!)
         const broker = "SEU_CLUSTER_URL.s1.eu.hivemq.cloud";
         const porta = 8884; 
-        const usuario = "SEU_USUARIO";
-        const senha = "SUA_SENHA";
+        const usuario = "fabiocassidori";
+        const senha = "Mudar123";
 
         // Inicializa o cliente MQTT Paho
         const client = new Paho.MQTT.Client(`wss://${broker}:${porta}/mqtt`, "Web_Client_" + Math.random().toString(16).substr(2, 8));
@@ -52,8 +52,8 @@
 
         function conectar() {
             client.connect({
-                userName: usuario,
-                password: senha,
+                userName: fabiocassidori,
+                password: Mudar123,
                 useSSL: true,
                 onSuccess: () => {
                     document.getElementById("status").innerText = "Conectado à Nuvem (Pronto)";
