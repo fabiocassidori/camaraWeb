@@ -6,86 +6,108 @@
     <title>Controle do ESP32</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; }
-        .btn { padding: 15px 30px; font-size: 18px; margin: 10px; cursor: pointer; border: none; border-radius: 5px; color: white; }
+        body { font-family: Arial, sans-serif; text-align: center; background: #f4f4f9; padding: 20px; color: #333; }
+        .card { background: white; max-width: 400px; margin: 20px auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .btn { padding: 12px 25px; font-size: 16px; margin: 10px; cursor: pointer; border: none; border-radius: 5px; color: white; font-weight: bold; transition: background 0.3s; }
         .on { background-color: #2ecc71; }
+        .on:hover { background-color: #27ae60; }
         .off { background-color: #e74c3c; }
-        #status { font-weight: bold; margin-bottom: 20px; color: #34495e; }
+        .off:hover { background-color: #c0392b; }
+        #status { font-weight: bold; padding: 10px; border-radius: 5px; margin-bottom: 20px; display: inline-block; }
+        .connected { background-color: #d4edda !important; color: #155724; }
+        .disconnected { background-color: #f8d7da !important; color: #721c24; }
+        .input-group { margin: 12px 0; text-align: left; }
+        .input-group label { display: block; font-size: 14px; margin-bottom: 5px; font-weight: bold; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
     </style>
 </head>
 <body>
 
-    <h2>Painel de Controle - Relés ESP32</h2>
-    <div id=\"status\">Aguardando credenciais...</div>
+    <div class="card">
+        <h2>Painel de Controle - ESP32</h2>
+        <div id="status" class="disconnected">Desconectado da Nuvem</div>
 
-    <div>
+        <div class="input-group">
+            <label for="mqttUser">Usuário MQTT:</label>
+            <input type="text" id="mqttUser" value="fabiocassidori" placeholder="Digite o usuário">
+        </div>
+        <div class="input-group">
+            <label for="mqttPass">Senha MQTT:</label>
+            <input type="password" id="mqttPass" value="Mudar123" placeholder="Digite a senha">
+        </div>
+        
+        <button class="btn" style="background-color: #34495e; width: 100%; margin: 10px 0 0 0;" onclick="conectar()">Conectar à Nuvem</button>
+    </div>
+
+    <div class="card">
         <h3>Relé 1 (Pino D2)</h3>
         <button class="btn on" onclick="enviarComando('R1_ON')">Ligar</button>
         <button class="btn off" onclick="enviarComando('R1_OFF')">Desligar</button>
     </div>
 
-    <div>
+    <div class="card">
         <h3>Relé 2 (Pino D4)</h3>
         <button class="btn on" onclick="enviarComando('R2_ON')">Ligar</button>
         <button class="btn off" onclick="enviarComando('R2_OFF')">Desligar</button>
     </div>
 
     <script>
-        // Configurações do Broker (Apenas as rotas públicas ficam expostas)
-        const BROKER_HOST = "8117aeb351a5404abd26feb1d2a100fb.s1.eu.hivemq.cloud"; // Ou o endereço do seu broker
-        const BROKER_PORT = 8884;                // Porta WebSocket padrão SSL (comum em cloud)
+        // Configurações obrigatórias para conexões WSS (WebSockets Seguros) exigidas pelo GitHub Pages
+        const BROKER_HOST = "8117aeb351a5404abd26feb1d2a100fb.s1.eu.hivemq.cloud";
+        const BROKER_PORT = 8884; // Porta TLS/SSL para WebSockets da HiveMQ
+        const BROKER_PATH = "/mqtt"; // Path exigido pela infraestrutura do broker
+        const CLIENT_ID = "web_client_" + Math.random().toString(16).substr(2, 8);
 
-        // Variáveis que vão guardar os dados digitados
-        let mqttUser = "";
-        let mqttPass = "";
+        // Instancia o cliente Paho informando a URL completa de barramento seguro
+        const client = new Paho.MQTT.Client(BROKER_HOST, Number(BROKER_PORT), BROKER_PATH, CLIENT_ID);
 
-        // Inicializa o cliente Paho MQTT
-        const client = new Paho.MQTT.Client(BROKER_HOST, Number(BROKER_PORT), "web_client_" + Math.random().toString(16).substr(2, 8));
-
+        // Callbacks de Gerenciamento do ciclo de vida da conexão
         client.onConnectionLost = (responseObject) => {
-            document.getElementById("status").innerText = "Conexão perdida! Tentando reconectar automaticamente...";
-            setTimeout(conectar, 5000);
+            const statusDiv = document.getElementById("status");
+            statusDiv.innerText = "Conexão perdida! Tentando reconectar...";
+            statusDiv.className = "disconnected";
+            setTimeout(conectar, 5000); // Tenta reconectar automaticamente após 5 segundos
         };
 
         client.onMessageArrived = (message) => {
-            console.log("Status recebido do ESP32: " + message.payloadString);
-            // Opcional: Atualizar a cor dos botões na tela aqui com base no feedback real do ESP32
+            console.log("Status de retorno recebido do ESP32: " + message.payloadString);
         };
 
         function conectar() {
-            // Se as variáveis estiverem vazias, pede ao usuário
-            if (!mqttUser || !mqttPass) {
-                mqttUser = prompt("Digite o Usuário do broker MQTT:");
-                mqttPass = prompt("Digite a Senha do broker MQTT:");
+            const userField = document.getElementById("mqttUser").value.trim();
+            const passField = document.getElementById("mqttPass").value.trim();
+            const statusDiv = document.getElementById("status");
 
-                // Validação caso o usuário clique em 'Cancelar' ou deixe em branco
-                if (!mqttUser || !mqttPass) {
-                    document.getElementById("status").innerText = "Conexão abortada. Recarregue a página para tentar novamente.";
-                    return;
-                }
-            }
+            statusDiv.innerText = "Conectando...";
+            statusDiv.className = "disconnected";
 
-            document.getElementById("status").innerText = "Tentando autenticar na Nuvem...";
-
-            client.connect({
-                userName: mqttUser,
-                password: mqttPass,
-                useSSL: true,
+            const options = {
+                useSSL: true, // Habilita o SSL/TLS obrigatoriamente
+                timeout: 5,
                 onSuccess: () => {
-                    document.getElementById("status").innerText = "Conectado à Nuvem (Pronto para comandos)";
+                    statusDiv.innerText = "Conectado à Nuvem (Pronto)";
+                    statusDiv.className = "connected";
                     client.subscribe("casa/reles/estado");
                 },
                 onFailure: (err) => {
-                    document.getElementById("status").innerText = "Erro de autenticação: " + err.errorMessage;
-                    
-                    // Se falhar, limpamos as variáveis para que ele peça os dados novamente na próxima tentativa
-                    mqttUser = "";
-                    mqttPass = "";
-                    
-                    console.log("Falha no login. Tentando novamente em 5s...");
-                    setTimeout(conectar, 5000);
+                    statusDiv.innerText = "Erro ao conectar: " + err.errorMessage;
+                    statusDiv.className = "disconnected";
+                    console.error("Falha detalhada de conexão:", err);
                 }
-            });
+            };
+
+            // Aplica as credenciais de forma segura como Strings coletadas dos inputs
+            if (userField !== "") options.userName = userField;
+            if (passField !== "") options.password = passField;
+
+            try {
+                if (client.isConnected()) {
+                    client.disconnect();
+                }
+                client.connect(options);
+            } catch (e) {
+                console.error("Exceção ao disparar conexão:", e);
+            }
         }
 
         function enviarComando(comando) {
@@ -95,14 +117,9 @@
                 client.send(message);
                 console.log("Comando enviado: " + comando);
             } else {
-                alert("Não foi possível enviar: Você não está conectado ao broker!");
+                alert("Você não está conectado ao Broker! Preencha as credenciais e clique em Conectar.");
             }
         }
-
-        // Inicia o fluxo pedindo os dados assim que a página carrega
-        window.onload = () => {
-            conectar();
-        };
     </script>
 </body>
 </html>
