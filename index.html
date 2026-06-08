@@ -10,13 +10,13 @@
         .btn { padding: 15px 30px; font-size: 18px; margin: 10px; cursor: pointer; border: none; border-radius: 5px; color: white; }
         .on { background-color: #2ecc71; }
         .off { background-color: #e74c3c; }
-        #status { font-weight: bold; margin-bottom: 20px; }
+        #status { font-weight: bold; margin-bottom: 20px; color: #34495e; }
     </style>
 </head>
 <body>
 
     <h2>Painel de Controle - Relés ESP32</h2>
-    <div id="status">Conectando ao Broker...</div>
+    <div id=\"status\">Aguardando credenciais...</div>
 
     <div>
         <h3>Relé 1 (Pino D2)</h3>
@@ -31,36 +31,59 @@
     </div>
 
     <script>
-        // CONFIGURAÇÕES DO SEU HIVEMQ (Atenção: Use a porta 8884 para WebSockets na Web!)
-        const broker = "8117aeb351a5404abd26feb1d2a100fb.s1.eu.hivemq.cloud";
-        const porta = 8884; 
-        const usuario = "fabiocassidori";
-        const senha = "Mudar123";
+        // Configurações do Broker (Apenas as rotas públicas ficam expostas)
+        const BROKER_HOST = "8117aeb351a5404abd26feb1d2a100fb.s1.eu.hivemq.cloud"; // Ou o endereço do seu broker
+        const BROKER_PORT = 8884;                // Porta WebSocket padrão SSL (comum em cloud)
 
-        // Inicializa o cliente MQTT Paho
-        const client = new Paho.MQTT.Client(`wss://${broker}:${porta}/mqtt`, "Web_Client_" + Math.random().toString(16).substr(2, 8));
+        // Variáveis que vão guardar os dados digitados
+        let mqttUser = "";
+        let mqttPass = "";
+
+        // Inicializa o cliente Paho MQTT
+        const client = new Paho.MQTT.Client(BROKER_HOST, Number(BROKER_PORT), "web_client_" + Math.random().toString(16).substr(2, 8));
 
         client.onConnectionLost = (responseObject) => {
-            document.getElementById("status").innerText = "Conexão perdida! Tentando reconectar...";
+            document.getElementById("status").innerText = "Conexão perdida! Tentando reconectar automaticamente...";
             setTimeout(conectar, 5000);
         };
 
         client.onMessageArrived = (message) => {
             console.log("Status recebido do ESP32: " + message.payloadString);
-            // Aqui você pode atualizar elementos visuais na tela baseando-se no retorno real do ESP32
+            // Opcional: Atualizar a cor dos botões na tela aqui com base no feedback real do ESP32
         };
 
         function conectar() {
+            // Se as variáveis estiverem vazias, pede ao usuário
+            if (!mqttUser || !mqttPass) {
+                mqttUser = prompt("Digite o Usuário do broker MQTT:");
+                mqttPass = prompt("Digite a Senha do broker MQTT:");
+
+                // Validação caso o usuário clique em 'Cancelar' ou deixe em branco
+                if (!mqttUser || !mqttPass) {
+                    document.getElementById("status").innerText = "Conexão abortada. Recarregue a página para tentar novamente.";
+                    return;
+                }
+            }
+
+            document.getElementById("status").innerText = "Tentando autenticar na Nuvem...";
+
             client.connect({
-                userName: usuario,
-                password: senha,
+                userName: mqttUser,
+                password: mqttPass,
                 useSSL: true,
                 onSuccess: () => {
-                    document.getElementById("status").innerText = "Conectado à Nuvem (Pronto)";
+                    document.getElementById("status").innerText = "Conectado à Nuvem (Pronto para comandos)";
                     client.subscribe("casa/reles/estado");
                 },
                 onFailure: (err) => {
-                    document.getElementById("status").innerText = "Erro ao conectar: " + err.errorMessage;
+                    document.getElementById("status").innerText = "Erro de autenticação: " + err.errorMessage;
+                    
+                    // Se falhar, limpamos as variáveis para que ele peça os dados novamente na próxima tentativa
+                    mqttUser = "";
+                    mqttPass = "";
+                    
+                    console.log("Falha no login. Tentando novamente em 5s...");
+                    setTimeout(conectar, 5000);
                 }
             });
         }
@@ -70,13 +93,16 @@
                 const message = new Paho.MQTT.Message(comando);
                 message.destinationName = "casa/reles/comando";
                 client.send(message);
+                console.log("Comando enviado: " + comando);
             } else {
-                alert("Não conectado à nuvem!");
+                alert("Não foi possível enviar: Você não está conectado ao broker!");
             }
         }
 
-        // Inicia a conexão
-        conectar();
+        // Inicia o fluxo pedindo os dados assim que a página carrega
+        window.onload = () => {
+            conectar();
+        };
     </script>
 </body>
 </html>
