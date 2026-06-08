@@ -52,8 +52,8 @@
 
         function conectar() {
             client.connect({
-                userName: fabiocassidori,
-                password: Mudar123,
+                userName: usuario,
+                password: senha,
                 useSSL: true,
                 onSuccess: () => {
                     document.getElementById("status").innerText = "Conectado à Nuvem (Pronto)";
